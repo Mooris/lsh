@@ -1,0 +1,43 @@
+name:                lsh
+version:             0.1.0.0
+-- synopsis:
+-- description:
+homepage:            https://github.com/Morris/lsh#readme
+license:             BSD3
+license-file:        LICENSE
+author:              peloille
+maintainer:          peloille.pierre@gmail.com
+copyright:           (c) 2019-2019 Pierre PELOILLE
+category:            Disruptive swagg
+build-type:          Simple
+cabal-version:       >=1.10
+extra-source-files:  README.md
+
+executable lsh
+  hs-source-dirs:      src
+  main-is:             Main.hs
+  other-modules:       LispVal
+                    ,  Parser
+                    ,  Eval
+                    ,  Process
+                    ,  Primitives
+                    ,  Environment
+                    ,  Expander
+  ghc-options:         -Wall -threaded -O2 -optc-O2 -optc-ffast-math
+  cc-options:          -Wall -O2 -D_XOPEN_SOURCE=600
+  default-language:    Haskell2010
+  default-extensions:  LambdaCase
+  build-depends:       base >= 4.7 && < 5
+                    ,  haskeline -any
+                    ,  megaparsec -any
+                    ,  parser-combinators -any
+                    ,  process -any
+                    ,  ansi-terminal -any
+                    ,  mtl -any
+                    ,  inline-c -any
+                    ,  bytestring -any
+                    ,  unix -any
+                    ,  split -any
+                    ,  directory -any
+                    ,  stm -any
+                    ,  containers -any
