@@ -6,7 +6,6 @@ module Expander (
 import LispVal
 
 import Data.Maybe
-import Debug.Trace
 
 syntaxRules :: [LispVal] -> [LispVal] -> LispVal
 syntaxRules literals rules = PrimitiveFunc (expander literals rules)
@@ -34,7 +33,8 @@ isMatch lit (List (Atom _ : restRule)) (List (Atom _ : restSyntax)) =
   isMatch' lit restRule restSyntax
 isMatch _ _ _ = Nothing
 
-isLit itm [] = False
+isLit :: String -> [LispVal] -> Bool
+isLit _ [] = False
 isLit itm (Atom x:_) | itm == x = True
 isLit itm (_:xs) | otherwise = isLit itm xs
 
@@ -43,7 +43,7 @@ isMatch' :: [LispVal] -> [LispVal] -> [LispVal] -> Maybe [(String, LispVal)]
 isMatch' _ [] [] = Just []
 isMatch' lit [Atom a] [Atom b] | isLit a lit = if a == b then Just [] else Nothing
 isMatch' _ [Atom a] [expr] = Just [(a, expr)]
-isMatch' lit (val@(List l) : Elipsis : rRest) sntx =
+isMatch' lit (val@(List _) : Elipsis : rRest) sntx =
   let (sRest, eMatches) = matchElipsis val sntx
   in case isMatch' lit rRest sRest of
     Just match -> Just (eMatches ++ match)
@@ -57,8 +57,8 @@ isMatch' lit (Atom a : Elipsis : rest) syntax | isLit a lit =
   isMatch' lit rest (matcher syntax)
  where
    matcher (Atom x : xs) = if x == a then matcher xs else xs
-   matcher [] = []
-isMatch' lit (val@(Atom a) : Elipsis : rest) syntax =
+   matcher _ = []
+isMatch' lit (val@(Atom _) : Elipsis : rest) syntax =
   let (sRest, eMatches) = matchElipsis val syntax
   in case isMatch' lit rest sRest of
     Just match -> Just (eMatches ++ match)
@@ -87,8 +87,8 @@ data Mode = Expand | NoExpand
 
 reWrite :: [(String, LispVal)] -> Mode -> LispVal -> LispVal
 reWrite match NoExpand val@(Atom a) = fromMaybe val $ lookup a match
-reWrite match Expand val@(Atom a) = List $ lookup' a match
-reWrite match Expand val@(List l) = List $ reWriteList (map prepareArgs l)
+reWrite match Expand (Atom a) = List $ lookup' a match
+reWrite match Expand (List l) = List $ reWriteList (map prepareArgs l)
  where
   prepareArgs str = lookup' (show str) match
   reWriteList lst@(x:_) | length x > 1 = List (map head lst) : reWriteList (map tail lst)
@@ -97,7 +97,8 @@ reWrite match Expand val@(List l) = List $ reWriteList (map prepareArgs l)
 reWrite match _ (List l) = List $ rw (reWrite match) l
 reWrite _ _ other = other
 
-rw fn [] = []
+rw :: (Mode -> LispVal -> LispVal) -> [LispVal] -> [LispVal]
+rw _ [] = []
 rw fn (lst : Elipsis : rest) = case fn Expand lst of
   List l -> l ++ rw fn rest
   other -> other : rw fn rest
@@ -114,11 +115,3 @@ expander lit rules [s] =
           ++ "\nNowBecomes:\t" ++ show res ++ "\n") $ Syntax res
 -}
 expander _ _ _ = String "Hmm sorry me no speak english"
-
-prettyShow :: [LispVal] -> String
-prettyShow [] = ""
-prettyShow (beg:rst) = "WithRules:\t" ++ show beg ++ "\n" ++ prettyShow' rst
- where
-  prettyShow' [] = ""
-  prettyShow' [x] = "\t\t" ++ show x
-  prettyShow' (x:xs) = "\t\t" ++ show x ++ "\n" ++ prettyShow' xs

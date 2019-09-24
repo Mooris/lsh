@@ -80,7 +80,7 @@ main = getArgs >>= \case
  where
   loop :: Env -> InputT IO ()
   loop local_env = getInputLine prompt >>= \case
-    Nothing    -> void $ outputStrLn "See ya, Motherfucker !"
+    Nothing    -> void $ outputStrLn "See ya !"
     Just ('!':input) -> liftIO (createProcess (shell input) >>= waitProcess) >> loop local_env
     Just input -> liftIO (evalAndPrint local_env input) >> loop local_env
       --(((eval env) . readExpr) input)  >>= \case

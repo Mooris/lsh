@@ -8,6 +8,7 @@ import           LispVal
 import qualified Language.C.Inline             as C
 import           GHC.IO.Handle
 import           System.Process
+import           System.Exit
 
 
 C.include "<stddef.h>"
@@ -18,6 +19,7 @@ data Chaining = None | Pipe
 getOutHandle
   :: (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle) -> IO Handle
 getOutHandle (_, Just h, _, _) = return h
+getOutHandle _ = exitFailure
 
 getProcessHandle
   :: (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle)
@@ -31,10 +33,10 @@ waitProcess :: a -> IO a
 waitProcess a = [C.exp| void { wait(NULL) } |] >> return a
 
 proc' :: FilePath -> [String] -> StdStream -> StdStream -> CreateProcess
-proc' cmd args sin sout = CreateProcess {  cmdspec = RawCommand cmd args,
+proc' cmd args sn sout = CreateProcess {  cmdspec = RawCommand cmd args,
                                   cwd = Nothing,
                                   env = Nothing,
-                                  std_in = sin,
+                                  std_in = sn,
                                   std_out = sout,
                                   std_err = Inherit,
                                   close_fds = False,
@@ -58,6 +60,8 @@ pipelineProcess Pipe stdOut args =
  where
   pipelineProcess' ((cmd, rest) : []) output input = createProcess (proc' cmd rest input output)
   pipelineProcess' ((cmd, rest) : rst) output input = createProcess (proc' cmd rest input CreatePipe) >>= getOutHandle >>= (pipelineProcess' rst output) . UseHandle
+  pipelineProcess' _ _ _ = exitFailure
+pipelineProcess _ _ _ = exitFailure
 
 handleSimpleCommand :: String -> [LispVal] -> IO LispVal
 handleSimpleCommand cmdString args =
@@ -77,6 +81,7 @@ handleCommand InString cmdString args =
     >>= (return . ShellString . fixOutput)
  where
   mappedArgs = map show args
+handleCommand InHandle _ _ = return NoValue
 
 -- handleCommand :: String -> [LispVal] -> IO LispVal
 -- handleCommand cmdString args =

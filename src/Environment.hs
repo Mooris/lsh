@@ -18,19 +18,10 @@ getVar envRef var  = liftIO (Map.lookup var <$> readIORef envRef) >>= \case
   Just anything -> return anything
   Nothing -> throwError $ UnboundVar var
 
-setVar :: Env -> String -> LispVal -> IOThrowsError LispVal
-setVar envRef var value = return value
-
 defineVar :: Env -> String -> LispVal -> IOThrowsError LispVal
-defineVar envRef var value = do
-     alreadyDefined <- liftIO $ isBound envRef var
-     if alreadyDefined
-        then setVar envRef var value >> return value
-        else liftIO $ atomicModifyIORef' envRef (\env -> (Map.insert var value env, value))
+defineVar envRef var value = liftIO $ atomicModifyIORef' envRef (\env -> (Map.insert var value env, value))
 
 bindVars :: Env -> [(String, LispVal)] -> IO Env
 bindVars envRef bindings = readIORef envRef >>= extendEnv >>= newIORef
      where extendEnv env = return . Map.union env $ Map.fromList bindings
-           addBinding (var, value) = do ref <- newIORef value
-                                        return (var, ref)
 

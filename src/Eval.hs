@@ -23,7 +23,9 @@ makeFunc
      -> [LispVal]
      -> m LispVal
 makeFunc varargs local_env prams bdy = return $ Func (map showVal prams) varargs bdy local_env
+makeNormalFunc :: Env -> [LispVal] -> [LispVal] -> IOThrowsError LispVal
 makeNormalFunc = makeFunc Nothing
+makeVarArgs :: LispVal -> Env -> [LispVal] -> [LispVal] -> IOThrowsError LispVal
 makeVarArgs = makeFunc . Just . showVal
 
 load :: String -> IOThrowsError [LispVal]
@@ -52,9 +54,7 @@ eval _ _ val@(Number _                              ) = return val
 eval _ _ val@(Bool   _                              ) = return val
 eval local_env outpt val@(Atom   a  ) = expandIfNeeded local_env val >>= \case
   Just form -> eval local_env outpt form
-  Nothing -> getVar local_env a >>= \case
-    vl@(Atom _) -> eval local_env outpt vl
-    other -> return other
+  Nothing -> checkShellCmd local_env (getVar local_env a) >>= eval local_env outpt
 eval local_env outpt (    List   [Atom "if", predi, conseq]) = eval local_env outpt predi >>= \case
   Bool False  -> return NoValue
   _           -> eval local_env outpt conseq
@@ -68,7 +68,7 @@ eval _ _ (List [Atom "quote", val]           ) = return val
 eval local_env _ (List [Atom "load", String filename]) =
   load filename >>= mapM_ (eval local_env Free) >> return NoValue
 eval local_env _ (List [Atom "set!", Atom var, form]) =
-  eval local_env InString form >>= setVar local_env var >> return NoValue
+  eval local_env InString form >>= defineVar local_env var >> return NoValue
 eval local_env c (List [Atom "define", Atom var, form@(List (Atom "lambda" : _))]) =
   eval local_env c form >>= defineVar local_env var
 eval local_env _ (List [Atom "define", Atom var, form]) =
@@ -85,7 +85,7 @@ eval local_env _ (List (Atom "lambda" : DottedList prams varargs : bdy)) =
 eval local_env _ (List (Atom "lambda" : varargs@(Atom _) : bdy)) =
   makeVarArgs varargs local_env [] bdy
 --eval local_env outpt (List (Atom "begin" : exprs)) = last <$> mapM (eval local_env outpt) exprs
-eval local_env _ (List (Atom "syntax-rules" : List literals : rules)) =
+eval _ _ (List (Atom "syntax-rules" : List literals : rules)) =
   return $ syntaxRules literals rules
 eval local_env outpt l@(List (function : args)) = 
   expandIfNeeded local_env l >>= \case
@@ -97,6 +97,10 @@ eval local_env outpt l@(List (function : args)) =
       val@Func{} -> evalFunc local_env outpt args val
       fn -> throwError $ NotFunction fn args
 eval _ _ (List []) = return NoValue
+eval _ _ vl@IOFunc{} = return vl
+eval _ _ vl@ShellFunc{} = return vl
+eval _ _ vl@PrimitiveFunc{} = return vl
+eval _ _ vl@Func{} = return vl
 eval _ _ val = trace ("|" ++ show val ++ "| <- wtf") return val
 
 evalFunc :: Env -> Output -> [LispVal] -> LispVal -> IOThrowsError LispVal
@@ -146,7 +150,7 @@ extractPath local_env = splitOn ":" <$> (getVar local_env "ENV"
   findPath :: [LispVal] -> IOThrowsError String
   findPath pth = case find (\(DottedList [String key] _) -> key == "PATH") pth of
       Just (DottedList _ (String value)) -> return value
-      Nothing -> throwError $ UnboundVar "PATH"
+      _ -> throwError $ UnboundVar "PATH"
 
 isExecutable :: String -> IO Bool
 isExecutable path = (==) ownerExecuteMode . intersectFileModes ownerExecuteMode . fileMode <$> getFileStatus path
@@ -154,7 +158,8 @@ isExecutable path = (==) ownerExecuteMode . intersectFileModes ownerExecuteMode 
 defineSyntax :: Env -> String -> LispVal -> IOThrowsError LispVal
 defineSyntax local_env kw expr = eval local_env InString expr >>= \case
   fun@Func{} -> defineVar local_env kw $ MacroTransformer ((head . params) fun) (body fun) (closure fun)
-  fun@(PrimitiveFunc fn) -> defineVar local_env kw $ PrimitiveMacroTransformer fn
+  (PrimitiveFunc fn) -> defineVar local_env kw $ PrimitiveMacroTransformer fn
+  _ -> throwError $ Default "Invalid transformer"
 
 expandIfNeeded :: Env -> LispVal -> IOThrowsError (Maybe LispVal)
 expandIfNeeded local_env val@(Atom a) = expandIfNeeded' local_env a val

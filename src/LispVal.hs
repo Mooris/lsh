@@ -65,11 +65,11 @@ showVal (PrimitiveFunc _) = "#<procedure>"
 showVal (Port _)   = "<IO port>"
 showVal (ShellFunc path) = "#<Shell-procedure " ++ path ++ ">"
 showVal (IOFunc _) = "#<procedure>"
-showVal u@PrimitiveMacroTransformer{} = "#<procedure>"
-showVal u@MacroTransformer{} = "#<procedure>"
+showVal PrimitiveMacroTransformer{} = "#<procedure>"
+showVal MacroTransformer{} = "#<procedure>"
 showVal (Syntax v) = "#<syntax " ++ showVal v ++ ">"
 showVal Elipsis = "#<...>"
-showVal Func {params = args, vararg = varargs, body = body, closure = env} =
+showVal Func {params = args, vararg = varargs, body = _, closure = _} =
    "(lambda (" ++ unwords (map show args) ++
       (case varargs of
          Nothing -> ""
@@ -105,5 +105,6 @@ runIOThrows action = extractValue <$> runExceptT (trapError action)
  where
   trapError act = catchError act (return . ErrorString . show)
 
-extractValue :: ThrowsError a -> a
+extractValue :: ThrowsError LispVal -> LispVal
 extractValue (Right val) = val
+extractValue _ = NoValue
